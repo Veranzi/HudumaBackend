@@ -3,19 +3,18 @@ import sys
 import glob
 import getpass
 import warnings
-from typing import List, Union
+from typing import List
 from dotenv import load_dotenv
-from langchain_community.document_loaders import (
-    PyPDFLoader, CSVLoader
-)
+
+from langchain_community.document_loaders import PyPDFLoader, CSVLoader
 from langchain_core.prompts import PromptTemplate
-from langchain.chains import RetrievalQA
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
-from langchain_community.vectorstores import FAISS
-from langchain.docstore.document import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import Chroma, FAISS
+from langchain_core.documents import Document
+
 warnings.filterwarnings("ignore")
+
 
 sys.path.insert(1, './src')
 print(sys.path.insert(1, '../src/'))
@@ -34,14 +33,13 @@ def load_model():
   Func loads the model and embeddings
   """
   model = ChatGoogleGenerativeAI(
-      model="models/gemini-2.5-flash-preview-05-20",
+      model=os.environ.get("GEMINI_CHAT_MODEL", "gemini-1.5-flash"),
       google_api_key=GEMINI_API_KEY,
       temperature=0.4,
       convert_system_message_to_human=True
   )
   embeddings = GoogleGenerativeAIEmbeddings(
-      # model="models/embedding-004",
-      model="models/text-embedding-004",
+      model=os.environ.get("GEMINI_EMBED_MODEL", "models/text-embedding-004"),
       google_api_key=GEMINI_API_KEY
   )
   return model, embeddings
@@ -80,6 +78,8 @@ def create_vector_store(docs: List[Document], embeddings, chunk_size: int = 1000
       chunk_overlap=chunk_overlap
   )
   splits = text_splitter.split_documents(docs)
+  if not splits:
+      raise ValueError("Documents did not contain any readable text chunks")
   # return Chroma.from_documents(splits, embeddings).as_retriever(search_kwargs={"k": 5}) 
   return FAISS.from_documents(splits, embeddings).as_retriever(search_kwargs={"k": 5})
 
@@ -244,19 +244,30 @@ def get_qa_chain(source_dir):
         input_variables=["context", "question"]
     )
 
-    response = RetrievalQA.from_chain_type(
-        llm=llm,
-        chain_type="stuff",
-        retriever=retriever,
-        return_source_documents=True,
-        chain_type_kwargs={"prompt": prompt}
-    )
+    def run_chain(inputs):
+        query = inputs.get("query") or inputs.get("question")
+        if not query:
+            raise ValueError("A 'query' input is required")
 
-    return response
+        source_documents = retriever.invoke(query)
+        context = "\n\n".join(doc.page_content for doc in source_documents)
+        prompt_text = prompt.format(context=context, question=query)
+        raw_response = llm.invoke(prompt_text)
+        if hasattr(raw_response, "content"):
+            answer = raw_response.content
+        else:
+            answer = raw_response
+
+        if isinstance(answer, list):
+            answer = " ".join(str(chunk) for chunk in answer)
+
+        return {"result": answer, "source_documents": source_documents}
+
+    return run_chain
 
   except Exception as e:
     print(f"Error initializing QA system: {e}")
-    return f"Error initializing QA system: {e}"
+    return None
 
 
 

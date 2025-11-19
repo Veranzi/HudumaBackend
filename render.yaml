@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: huduma-ai-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: GEMINI_CHAT_MODEL
+        value: models/gemini-2.5-flash
+      - key: GEMINI_EMBED_MODEL
+        value: models/text-embedding-004
+    healthCheckPath: /health
+
