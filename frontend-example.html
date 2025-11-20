@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Huduma AI - Document Q&A</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 40px 30px;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 2.5em;
+      margin-bottom: 10px;
+    }
+
+    .header p {
+      font-size: 1.1em;
+      opacity: 0.9;
+    }
+
+    .upload-section {
+      padding: 30px;
+      text-align: center;
+      border-bottom: 1px solid #eee;
+    }
+
+    .upload-btn {
+      display: inline-block;
+      padding: 14px 35px;
+      background: #667eea;
+      color: white;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 16px;
+      transition: all 0.3s;
+      border: none;
+    }
+
+    .upload-btn:hover:not(:disabled) {
+      background: #5568d3;
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .upload-btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    #file-input {
+      display: none;
+    }
+
+    .reset-btn {
+      margin-left: 15px;
+      padding: 14px 25px;
+      background: #e74c3c;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 16px;
+      transition: all 0.3s;
+    }
+
+    .reset-btn:hover {
+      background: #c0392b;
+      transform: translateY(-2px);
+    }
+
+    .status {
+      margin-top: 15px;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    .status.success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+
+    .status.error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+
+    .chat-section {
+      display: none;
+      height: 600px;
+      flex-direction: column;
+    }
+
+    .chat-section.active {
+      display: flex;
+    }
+
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 25px;
+      background: #f8f9fa;
+    }
+
+    .message {
+      margin-bottom: 20px;
+      display: flex;
+      animation: fadeIn 0.3s;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .message.user {
+      justify-content: flex-end;
+    }
+
+    .message-content {
+      max-width: 75%;
+      padding: 14px 18px;
+      border-radius: 16px;
+      word-wrap: break-word;
+      line-height: 1.5;
+    }
+
+    .message.user .message-content {
+      background: #667eea;
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+
+    .message.assistant .message-content {
+      background: white;
+      color: #333;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      border-bottom-left-radius: 4px;
+    }
+
+    .query-form {
+      display: flex;
+      padding: 20px;
+      border-top: 1px solid #eee;
+      background: white;
+      gap: 10px;
+    }
+
+    .query-form input {
+      flex: 1;
+      padding: 14px 18px;
+      border: 2px solid #ddd;
+      border-radius: 12px;
+      font-size: 16px;
+      outline: none;
+      transition: border-color 0.3s;
+    }
+
+    .query-form input:focus {
+      border-color: #667eea;
+    }
+
+    .query-form button {
+      padding: 14px 30px;
+      background: #667eea;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 16px;
+      transition: all 0.3s;
+    }
+
+    .query-form button:hover:not(:disabled) {
+      background: #5568d3;
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .query-form button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid rgba(255,255,255,.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 1s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #666;
+    }
+
+    .empty-state h3 {
+      margin-bottom: 10px;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🇰🇪 Huduma AI</h1>
+      <p>Msaada Kwa Kila Mtu, Popote Ulipo</p>
+      <p style="font-size: 0.9em; margin-top: 10px; opacity: 0.8;">Help for Everyone, Wherever You Are</p>
+    </div>
+
+    <div class="upload-section">
+      <label for="file-input" class="upload-btn" id="upload-label">
+        📄 Upload PDF Document
+      </label>
+      <input type="file" id="file-input" accept=".pdf">
+      <button id="reset-btn" class="reset-btn" style="display: none;">
+        🔄 Reset
+      </button>
+      <div id="status" class="status" style="display: none;"></div>
+    </div>
+
+    <div class="chat-section" id="chat-section">
+      <div class="messages" id="messages">
+        <div class="empty-state">
+          <h3>👋 Welcome!</h3>
+          <p>Upload a PDF document to start asking questions</p>
+        </div>
+      </div>
+      <form class="query-form" id="query-form">
+        <input
+          type="text"
+          id="query-input"
+          placeholder="Ask a question about your document..."
+          required
+          autocomplete="off"
+        >
+        <button type="submit" id="send-btn">
+          <span id="send-text">Send</span>
+          <span id="send-loading" class="loading" style="display: none;"></span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = 'https://hudumabackend.onrender.com';
+    let sessionId = null;
+
+    const fileInput = document.getElementById('file-input');
+    const uploadLabel = document.getElementById('upload-label');
+    const resetBtn = document.getElementById('reset-btn');
+    const statusDiv = document.getElementById('status');
+    const chatSection = document.getElementById('chat-section');
+    const messagesDiv = document.getElementById('messages');
+    const queryForm = document.getElementById('query-form');
+    const queryInput = document.getElementById('query-input');
+    const sendBtn = document.getElementById('send-btn');
+    const sendText = document.getElementById('send-text');
+    const sendLoading = document.getElementById('send-loading');
+
+    // Show status message
+    function showStatus(message, type = 'success') {
+      statusDiv.textContent = message;
+      statusDiv.className = `status ${type}`;
+      statusDiv.style.display = 'block';
+      setTimeout(() => {
+        statusDiv.style.display = 'none';
+      }, 5000);
+    }
+
+    // Upload handler
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      if (file.type !== 'application/pdf') {
+        showStatus('Please upload a PDF file', 'error');
+        fileInput.value = '';
+        return;
+      }
+
+      uploadLabel.textContent = '⏳ Uploading...';
+      uploadLabel.disabled = true;
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await fetch(`${API_URL}/upload`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!res.ok) {
+          const error = await res.json();
+          throw new Error(error.detail || 'Upload failed');
+        }
+
+        const data = await res.json();
+        sessionId = data.session_id;
+        
+        uploadLabel.textContent = '📄 Upload PDF Document';
+        uploadLabel.disabled = false;
+        resetBtn.style.display = 'inline-block';
+        chatSection.classList.add('active');
+        messagesDiv.innerHTML = '';
+        addMessage('assistant', '✅ Document uploaded successfully! How may I help you?');
+        showStatus(`Document "${data.filename}" uploaded successfully!`, 'success');
+        queryInput.focus();
+      } catch (error) {
+        console.error('Upload error:', error);
+        showStatus(error.message || 'Failed to upload document. Please try again.', 'error');
+        uploadLabel.textContent = '📄 Upload PDF Document';
+        uploadLabel.disabled = false;
+      }
+    });
+
+    // Query handler
+    queryForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      if (!sessionId || !queryInput.value.trim()) {
+        if (!sessionId) {
+          showStatus('Please upload a document first', 'error');
+        }
+        return;
+      }
+
+      const query = queryInput.value.trim();
+      queryInput.value = '';
+      sendBtn.disabled = true;
+      sendText.style.display = 'none';
+      sendLoading.style.display = 'inline-block';
+
+      addMessage('user', query);
+
+      try {
+        const res = await fetch(`${API_URL}/query`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            query: query,
+            session_id: sessionId,
+          }),
+        });
+
+        if (!res.ok) {
+          const error = await res.json();
+          throw new Error(error.detail || 'Query failed');
+        }
+
+        const data = await res.json();
+        addMessage('assistant', data.response);
+      } catch (error) {
+        console.error('Query error:', error);
+        addMessage('assistant', '❌ Sorry, I encountered an error. Please try again.');
+      } finally {
+        sendBtn.disabled = false;
+        sendText.style.display = 'inline';
+        sendLoading.style.display = 'none';
+        queryInput.focus();
+      }
+    });
+
+    // Reset handler
+    resetBtn.addEventListener('click', async () => {
+      if (confirm('Are you sure you want to reset? This will clear the current document and conversation.')) {
+        if (sessionId) {
+          try {
+            await fetch(`${API_URL}/session/${sessionId}`, {
+              method: 'DELETE',
+            });
+          } catch (error) {
+            console.error('Error deleting session:', error);
+          }
+        }
+        sessionId = null;
+        resetBtn.style.display = 'none';
+        chatSection.classList.remove('active');
+        messagesDiv.innerHTML = '<div class="empty-state"><h3>👋 Welcome!</h3><p>Upload a PDF document to start asking questions</p></div>';
+        fileInput.value = '';
+        showStatus('Session reset successfully', 'success');
+      }
+    });
+
+    // Add message to chat
+    function addMessage(role, content) {
+      // Remove empty state if exists
+      const emptyState = messagesDiv.querySelector('.empty-state');
+      if (emptyState) {
+        emptyState.remove();
+      }
+
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `message ${role}`;
+      messageDiv.innerHTML = `<div class="message-content">${content}</div>`;
+      messagesDiv.appendChild(messageDiv);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    // Allow Enter key to submit (but Shift+Enter for new line)
+    queryInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        queryForm.dispatchEvent(new Event('submit'));
+      }
+    });
+  </script>
+</body>
+</html>
+

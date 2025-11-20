@@ -6,6 +6,7 @@ import os
 import sys
 import tempfile
 import uuid
+import requests
 from pathlib import Path
 from typing import Optional
 
@@ -83,18 +84,27 @@ async def startup_event():
 
 class QueryRequest(BaseModel):
     query: str
-    session_id: str
+    session_id: Optional[str] = None  # Optional for general Q&A
 
 
 class QueryResponse(BaseModel):
     response: str
-    session_id: str
+    session_id: Optional[str] = None
 
 
 class UploadResponse(BaseModel):
     session_id: str
     message: str
     filename: str
+
+
+class UploadUrlRequest(BaseModel):
+    url: str
+    session_id: Optional[str] = None
+
+
+class GeneralQueryRequest(BaseModel):
+    query: str
 
 
 @app.get("/")
@@ -203,19 +213,152 @@ async def upload_document(
         )
 
 
+@app.post("/upload-url", response_model=UploadResponse)
+async def upload_from_url(request: UploadUrlRequest):
+    """
+    Upload a PDF document from a URL and initialize the QA chain
+    
+    Returns a session_id that should be used for subsequent queries
+    """
+    try:
+        # Generate or use provided session ID
+        if not request.session_id:
+            session_id = str(uuid.uuid4())
+        else:
+            session_id = request.session_id
+        
+        # Validate URL
+        if not request.url.startswith(('http://', 'https://')):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid URL. Must start with http:// or https://"
+            )
+        
+        # Download the file
+        try:
+            response = requests.get(request.url, timeout=30, stream=True)
+            response.raise_for_status()
+            
+            # Check content type
+            content_type = response.headers.get('content-type', '').lower()
+            if 'pdf' not in content_type and not request.url.lower().endswith('.pdf'):
+                raise HTTPException(
+                    status_code=400,
+                    detail="URL does not point to a PDF file"
+                )
+            
+            # Save to temporary file
+            suffix = '.pdf'
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
+                for chunk in response.iter_content(chunk_size=8192):
+                    temp_file.write(chunk)
+                temp_path = temp_file.name
+            
+            filename = request.url.split('/')[-1] or 'document.pdf'
+            
+        except requests.RequestException as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Failed to download file from URL: {str(e)}"
+            )
+        
+        # Initialize QA chain
+        qa_chain = get_qa_chain(temp_path)
+        
+        if qa_chain is None:
+            # Clean up temp file
+            os.unlink(temp_path)
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to initialize QA system. Check server logs for details."
+            )
+        
+        # Store session
+        sessions[session_id] = {
+            "qa_chain": qa_chain,
+            "temp_path": temp_path,
+            "filename": filename
+        }
+        
+        return UploadResponse(
+            session_id=session_id,
+            message="Document uploaded and processed successfully",
+            filename=filename
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Clean up temp file if it exists
+        if 'temp_path' in locals():
+            try:
+                os.unlink(temp_path)
+            except:
+                pass
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing URL: {str(e)}"
+        )
+
+
 @app.post("/query", response_model=QueryResponse)
 async def query_document(request: QueryRequest):
     """
-    Query the uploaded document using the session_id from upload
+    Query the uploaded document using the session_id from upload,
+    OR ask a general question without document context.
     
-    Requires a valid session_id from a previous /upload call
+    If session_id is provided, queries the uploaded document.
+    If session_id is None, provides general Q&A about Kenyan Government services.
     """
     try:
-        # Validate session
+        # If no session_id, use general Q&A mode
+        if not request.session_id:
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            from dotenv import load_dotenv
+            
+            load_dotenv()
+            api_key = os.environ.get("GOOGLE_API_KEY")
+            if not api_key:
+                raise HTTPException(
+                    status_code=500,
+                    detail="API key not configured"
+                )
+            
+            # Use the prompt template from upload_file_rag for general queries
+            from upload_file_rag import PROMPT_TEMPLATE
+            from langchain_core.prompts import PromptTemplate
+            
+            llm = ChatGoogleGenerativeAI(
+                model=os.environ.get("GEMINI_CHAT_MODEL", "models/gemini-2.5-flash"),
+                google_api_key=api_key,
+                temperature=0.4,
+                convert_system_message_to_human=True
+            )
+            
+            # Format prompt for general query (no document context)
+            prompt = PromptTemplate(
+                template=PROMPT_TEMPLATE.replace("{context}\n\n", ""),
+                input_variables=["question"]
+            )
+            
+            prompt_text = prompt.format(question=request.query)
+            raw_response = llm.invoke(prompt_text)
+            
+            if hasattr(raw_response, "content"):
+                answer = raw_response.content
+            else:
+                answer = str(raw_response)
+            
+            return QueryResponse(
+                response=f"Huduma AI 🇰🇪: {answer}",
+                session_id=None
+            )
+        
+        # Document-based query mode
         if request.session_id not in sessions:
             raise HTTPException(
                 status_code=404,
-                detail="Session not found. Please upload a document first."
+                detail="Session not found. Please upload a document first, or omit session_id for general questions."
             )
         
         session = sessions[request.session_id]
