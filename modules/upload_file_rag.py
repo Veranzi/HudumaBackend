@@ -28,20 +28,20 @@ GEMINI_API_KEY = os.environ.get("GOOGLE_API_KEY")
 
 def load_model():
   """
-    Load LLM and embeddings
+  Load LLM and embeddings
   """
-    if not GEMINI_API_KEY:
-        raise ValueError("GOOGLE_API_KEY is not set in environment variables. Please set it in Render environment variables.")
-    
+  if not GEMINI_API_KEY:
+    raise ValueError("GOOGLE_API_KEY is not set in environment variables. Please set it in Render environment variables.")
+  
   model = ChatGoogleGenerativeAI(
-        model=os.environ.get("GEMINI_CHAT_MODEL", "models/gemini-2.5-flash"),
-      google_api_key=GEMINI_API_KEY,
-      temperature=0.4,
-      convert_system_message_to_human=True
+    model=os.environ.get("GEMINI_CHAT_MODEL", "models/gemini-2.5-flash"),
+    google_api_key=GEMINI_API_KEY,
+    temperature=0.4,
+    convert_system_message_to_human=True
   )
   embeddings = GoogleGenerativeAIEmbeddings(
-        model=os.environ.get("GEMINI_EMBED_MODEL", "models/text-embedding-004"),
-      google_api_key=GEMINI_API_KEY
+    model=os.environ.get("GEMINI_EMBED_MODEL", "models/text-embedding-004"),
+    google_api_key=GEMINI_API_KEY
   )
   return model, embeddings
 

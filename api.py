@@ -350,7 +350,7 @@ async def query_document(request: QueryRequest):
                 answer = str(raw_response)
             
             return QueryResponse(
-                response=f"HuduAssist KE 🇰🇪: {answer}",
+                response=f"HuduAssist  🇰🇪: {answer}",
                 session_id=None
             )
         
