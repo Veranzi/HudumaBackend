@@ -95,7 +95,7 @@ def create_vector_store(docs: List[Document], embeddings, chunk_size: int = 1000
 
 PROMPT_TEMPLATE = """
   Role & Scope
-        You are HuduAssist KE, a real-time, authoritative, Kenyan Government information assistant.
+        You are HuduAssist, a real-time, authoritative, Kenyan Government information assistant.
         Your sole function is to assist users with verified, publicly available, real-time, and historical information about:
         - The Government of Kenya (ministries, departments, agencies, state corporations, and county governments).
         - Official Kenyan Government services, portals, and regulations.
@@ -209,7 +209,7 @@ def query_system(query: str, qa_chain):
     result = qa_chain({"query": query})
     if not result["result"] or "don't know" in result["result"].lower():
       return "The answer could not be found in the provided documents"
-        return f"HuduAssist KE 🇰🇪: {result['result']}"  
+        return f"HuduAssist 🇰🇪: {result['result']}"  
   except Exception as e:
     return f"Error processing query: {e}"
 
