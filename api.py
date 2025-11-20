@@ -1,5 +1,5 @@
 """
-FastAPI server for Huduma AI RAG system
+FastAPI server for HuduAssist KE RAG system
 Deploy this to Render to get API endpoints for your custom UI
 """
 import os
@@ -37,7 +37,7 @@ except ImportError as e:
     raise
 
 app = FastAPI(
-    title="Huduma AI API",
+    title="HuduAssist KE API",
     description="RAG-based Q&A API for Kenyan Government information",
     version="1.0.0"
 )
@@ -111,7 +111,7 @@ class GeneralQueryRequest(BaseModel):
 async def root():
     """Root endpoint"""
     return {
-        "message": "Huduma AI API",
+        "message": "HuduAssist KE API",
         "version": "1.0.0",
         "status": "running"
     }
@@ -350,7 +350,7 @@ async def query_document(request: QueryRequest):
                 answer = str(raw_response)
             
             return QueryResponse(
-                response=f"Huduma AI 🇰🇪: {answer}",
+                response=f"HuduAssist KE 🇰🇪: {answer}",
                 session_id=None
             )
         
