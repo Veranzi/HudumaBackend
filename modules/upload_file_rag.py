@@ -85,11 +85,11 @@ def create_vector_store(docs: List[Document], embeddings, chunk_size: int = 1000
       chunk_overlap=chunk_overlap
   )
   splits = text_splitter.split_documents(docs)
-    
-    if not splits:
-        raise ValueError("Documents did not contain any readable text chunks")
-    
-    # Use FAISS for retrieval
+  
+  if not splits:
+    raise ValueError("Documents did not contain any readable text chunks")
+  
+  # Use FAISS for retrieval
   return FAISS.from_documents(splits, embeddings).as_retriever(search_kwargs={"k": 5})
 
 
