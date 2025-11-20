@@ -17,8 +17,8 @@ warnings.filterwarnings("ignore")
 # Ensure src path is included (optional, only if src directory exists)
 src_paths = ['./src', '../src/']
 for path in src_paths:
-    if os.path.exists(path):
-        sys.path.insert(1, path)
+  if os.path.exists(path):
+    sys.path.insert(1, path)
 
 load_dotenv()
 
@@ -47,33 +47,33 @@ def load_model():
 
 
 def load_documents(source_dir: str):
-    """
-    Load documents from multiple sources with debug info
-    """
-    documents = []
+  """
+  Load documents from multiple sources with debug info
+  """
+  documents = []
 
-    file_types = {
-      "*.pdf": PyPDFLoader,
-      "*.csv": CSVLoader
-    }
+  file_types = {
+    "*.pdf": PyPDFLoader,
+    "*.csv": CSVLoader
+  }
 
-    if os.path.isfile(source_dir):
-        ext = os.path.splitext(source_dir)[1].lower()
-        if ext == ".pdf":
-            documents.extend(PyPDFLoader(source_dir).load())
-        elif ext == ".csv":
-            documents.extend(CSVLoader(source_dir).load())
-    else:
-        for pattern, loader in file_types.items():
-            for file_path in glob.glob(os.path.join(source_dir, pattern)):
-                documents.extend(loader(file_path).load())
-    
-    print(f"[DEBUG] Loaded {len(documents)} documents from {source_dir}")
-    
-    if not documents:
-        raise ValueError("No documents found in the specified sources")
-    
-    return documents
+  if os.path.isfile(source_dir):
+    ext = os.path.splitext(source_dir)[1].lower()
+    if ext == ".pdf":
+      documents.extend(PyPDFLoader(source_dir).load())
+    elif ext == ".csv":
+      documents.extend(CSVLoader(source_dir).load())
+  else:
+    for pattern, loader in file_types.items():
+      for file_path in glob.glob(os.path.join(source_dir, pattern)):
+        documents.extend(loader(file_path).load())
+  
+  print(f"[DEBUG] Loaded {len(documents)} documents from {source_dir}")
+  
+  if not documents:
+    raise ValueError("No documents found in the specified sources")
+  
+  return documents
 
 
 def create_vector_store(docs: List[Document], embeddings, chunk_size: int = 10000, chunk_overlap: int = 200):
@@ -158,50 +158,50 @@ Answer:
 
 
 def get_qa_chain(source_dir):
-    """
-    Create QA chain with proper error handling
-    """
+  """
+  Create QA chain with proper error handling
+  """
   try:
     docs = load_documents(source_dir)
     llm, embeddings = load_model()
     retriever = create_vector_store(docs, embeddings)
 
     prompt = PromptTemplate(
-        template=PROMPT_TEMPLATE,
-        input_variables=["context", "question"]
+      template=PROMPT_TEMPLATE,
+      input_variables=["context", "question"]
     )
 
-        def run_chain(inputs):
-            query = inputs.get("query") or inputs.get("question")
-            if not query:
-                raise ValueError("A 'query' input is required")
+    def run_chain(inputs):
+      query = inputs.get("query") or inputs.get("question")
+      if not query:
+        raise ValueError("A 'query' input is required")
 
-            source_documents = retriever.invoke(query)
-            context = "\n\n".join(doc.page_content for doc in source_documents)
-            prompt_text = prompt.format(context=context, question=query)
-            raw_response = llm.invoke(prompt_text)
+      source_documents = retriever.invoke(query)
+      context = "\n\n".join(doc.page_content for doc in source_documents)
+      prompt_text = prompt.format(context=context, question=query)
+      raw_response = llm.invoke(prompt_text)
 
-            if hasattr(raw_response, "content"):
-                answer = raw_response.content
-            else:
-                answer = raw_response
+      if hasattr(raw_response, "content"):
+        answer = raw_response.content
+      else:
+        answer = raw_response
 
-            if isinstance(answer, list):
-                answer = " ".join(str(chunk) for chunk in answer)
+      if isinstance(answer, list):
+        answer = " ".join(str(chunk) for chunk in answer)
 
-            return {"result": answer, "source_documents": source_documents}
+      return {"result": answer, "source_documents": source_documents}
 
-        return run_chain
+    return run_chain
 
   except Exception as e:
-        print(f"[ERROR] Initializing QA system: {e}")
-        return None
+    print(f"[ERROR] Initializing QA system: {e}")
+    return None
 
 
 def query_system(query: str, qa_chain):
-    """
-    Query the QA system
-    """
+  """
+  Query the QA system
+  """
   if not qa_chain:
     return "System not initialized properly"
 
@@ -209,7 +209,7 @@ def query_system(query: str, qa_chain):
     result = qa_chain({"query": query})
     if not result["result"] or "don't know" in result["result"].lower():
       return "The answer could not be found in the provided documents"
-        return f"HuduAssist 🇰🇪: {result['result']}"  
+    return f"HuduAssist 🇰🇪: {result['result']}"  
   except Exception as e:
     return f"Error processing query: {e}"
 
