@@ -19,9 +19,21 @@ from pydantic import BaseModel
 # Load environment variables
 load_dotenv()
 
-# Add modules to path
-sys.path.insert(1, './modules')
-from upload_file_rag import get_qa_chain, query_system
+# Add modules to path - use absolute path for Render compatibility
+current_dir = Path(__file__).parent
+modules_dir = current_dir / 'modules'
+sys.path.insert(0, str(modules_dir))
+
+# Import with error handling
+try:
+    from upload_file_rag import get_qa_chain, query_system
+except ImportError as e:
+    import traceback
+    print(f"Error importing upload_file_rag: {e}")
+    print(f"Current directory: {os.getcwd()}")
+    print(f"Python path: {sys.path}")
+    print(f"Traceback: {traceback.format_exc()}")
+    raise
 
 app = FastAPI(
     title="Huduma AI API",
@@ -40,6 +52,33 @@ app.add_middleware(
 
 # In-memory session storage (use Redis in production for scalability)
 sessions = {}
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Check that everything is configured correctly on startup"""
+    errors = []
+    
+    # Check API key
+    if not os.environ.get("GOOGLE_API_KEY"):
+        errors.append("GOOGLE_API_KEY environment variable is not set")
+    
+    # Check if modules can be imported
+    try:
+        from upload_file_rag import get_qa_chain, query_system
+    except Exception as e:
+        errors.append(f"Failed to import upload_file_rag: {str(e)}")
+    
+    if errors:
+        print("=" * 50)
+        print("STARTUP ERRORS:")
+        for error in errors:
+            print(f"  - {error}")
+        print("=" * 50)
+        # Don't raise - let the app start so health check can report the issue
+    else:
+        print("✓ API started successfully")
+        print(f"✓ GOOGLE_API_KEY configured: {bool(os.environ.get('GOOGLE_API_KEY'))}")
 
 
 class QueryRequest(BaseModel):
@@ -71,10 +110,29 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "api_key_configured": bool(os.environ.get("GOOGLE_API_KEY"))
+    try:
+        # Try to import to verify modules are available
+        from upload_file_rag import get_qa_chain, query_system
+        modules_ok = True
+        module_error = None
+    except Exception as e:
+        modules_ok = False
+        module_error = str(e)
+    
+    api_key_configured = bool(os.environ.get("GOOGLE_API_KEY"))
+    
+    status = "healthy" if (modules_ok and api_key_configured) else "degraded"
+    
+    response = {
+        "status": status,
+        "api_key_configured": api_key_configured,
+        "modules_loaded": modules_ok
     }
+    
+    if module_error:
+        response["module_error"] = module_error
+    
+    return response
 
 
 @app.post("/upload", response_model=UploadResponse)

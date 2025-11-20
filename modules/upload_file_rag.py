@@ -14,24 +14,27 @@ from langchain_core.documents import Document
 
 warnings.filterwarnings("ignore")
 
-# Ensure src path is included
-sys.path.insert(1, './src')
-sys.path.insert(1, '../src/')
+# Ensure src path is included (optional, only if src directory exists)
+src_paths = ['./src', '../src/']
+for path in src_paths:
+    if os.path.exists(path):
+        sys.path.insert(1, path)
 
 load_dotenv()
 
-# Load API key strictly from environment
+# Load API key from environment (don't raise at import time - check in functions)
 GEMINI_API_KEY = os.environ.get("GOOGLE_API_KEY")
-if not GEMINI_API_KEY:
-    raise ValueError("GOOGLE_API_KEY is not set in environment variables.")
 
 
 def load_model():
     """
     Load LLM and embeddings
     """
+    if not GEMINI_API_KEY:
+        raise ValueError("GOOGLE_API_KEY is not set in environment variables. Please set it in Render environment variables.")
+    
     model = ChatGoogleGenerativeAI(
-        model=os.environ.get("GEMINI_CHAT_MODEL", "gemini-1.5-flash"),
+        model=os.environ.get("GEMINI_CHAT_MODEL", "models/gemini-2.5-flash"),
         google_api_key=GEMINI_API_KEY,
         temperature=0.4,
         convert_system_message_to_human=True
