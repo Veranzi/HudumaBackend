@@ -161,10 +161,13 @@ async def upload_document(
             session_id = str(uuid.uuid4())
         
         # Validate file type
-        if not file.filename.endswith('.pdf'):
+        allowed_extensions = ['.pdf', '.doc', '.docx', '.csv', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
+        file_ext = Path(file.filename).suffix.lower()
+        
+        if file_ext not in allowed_extensions:
             raise HTTPException(
                 status_code=400,
-                detail="Only PDF files are supported"
+                detail=f"Unsupported file type. Supported types: PDF, DOC, DOCX, CSV, JPG, PNG, GIF, BMP, WEBP"
             )
         
         # Save uploaded file temporarily
@@ -239,12 +242,20 @@ async def upload_from_url(request: UploadUrlRequest):
             response = requests.get(request.url, timeout=30, stream=True)
             response.raise_for_status()
             
-            # Check content type
+            # Check content type and file extension
             content_type = response.headers.get('content-type', '').lower()
-            if 'pdf' not in content_type and not request.url.lower().endswith('.pdf'):
+            url_lower = request.url.lower()
+            allowed_extensions = ['.pdf', '.doc', '.docx', '.csv', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
+            
+            # Check if URL ends with allowed extension
+            has_allowed_ext = any(url_lower.endswith(ext) for ext in allowed_extensions)
+            # Check content type (more lenient - accept if it's a document or image type)
+            is_document_type = any(ct in content_type for ct in ['pdf', 'document', 'msword', 'wordprocessing', 'image', 'csv', 'text'])
+            
+            if not has_allowed_ext and not is_document_type:
                 raise HTTPException(
                     status_code=400,
-                    detail="URL does not point to a PDF file"
+                    detail="URL does not point to a supported file. Supported types: PDF, DOC, DOCX, CSV, JPG, PNG, GIF, BMP, WEBP"
                 )
             
             # Save to temporary file

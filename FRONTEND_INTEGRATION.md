@@ -193,9 +193,12 @@ function HudumaAI() {
       </div>
 
       <div className="upload-section">
+        <p style={{ marginBottom: '15px', fontSize: '14px', color: '#666' }}>
+          💡 <strong>Tip:</strong> You can ask questions immediately, or upload a PDF for document-specific answers
+        </p>
         <div style={{ marginBottom: '15px' }}>
           <label htmlFor="pdf-upload" className="upload-btn">
-            {uploading ? 'Uploading...' : 'Upload PDF Document'}
+            {uploading ? 'Uploading...' : '📄 Upload PDF Document (Optional)'}
           </label>
           <input
             id="pdf-upload"
@@ -225,41 +228,45 @@ function HudumaAI() {
         </div>
         {sessionId && (
           <button onClick={handleReset} className="reset-btn">
-            Reset
+            🔄 Reset Document
           </button>
         )}
-        <p style={{ marginTop: '10px', fontSize: '14px', color: '#666' }}>
-          💡 You can also ask general questions without uploading a document!
-        </p>
       </div>
 
+      {/* Chat section is always visible - users can ask questions immediately */}
       <div className="chat-section">
-          <div className="messages">
-            {messages.map((msg, idx) => (
-              <div key={idx} className={`message ${msg.role}`}>
-                <div className="message-content">{msg.content}</div>
-              </div>
-            ))}
-            {loading && (
-              <div className="message assistant">
-                <div className="message-content">Thinking...</div>
-              </div>
-            )}
-          </div>
-
-          <form onSubmit={handleQuery} className="query-form">
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="How may I help you?"
-              disabled={loading}
-            />
-            <button type="submit" disabled={loading || !query.trim()}>
-              Send
-            </button>
-          </form>
+        <div className="messages">
+          {messages.length === 0 && (
+            <div className="empty-state">
+              <h3>👋 Welcome!</h3>
+              <p>Ask me anything about Kenyan Government services, or upload a PDF for document-specific questions</p>
+            </div>
+          )}
+          {messages.map((msg, idx) => (
+            <div key={idx} className={`message ${msg.role}`}>
+              <div className="message-content">{msg.content}</div>
+            </div>
+          ))}
+          {loading && (
+            <div className="message assistant">
+              <div className="message-content">Thinking...</div>
+            </div>
+          )}
         </div>
+
+        <form onSubmit={handleQuery} className="query-form">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={sessionId ? "Ask about your document or general questions..." : "Ask about Kenyan Government services..."}
+            disabled={loading}
+          />
+          <button type="submit" disabled={loading || !query.trim()}>
+            Send
+          </button>
+        </form>
+      </div>
       )}
     </div>
   );

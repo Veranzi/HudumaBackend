@@ -248,29 +248,32 @@
       <p style="font-size: 0.9em; margin-top: 10px; opacity: 0.8;">Help for Everyone, Wherever You Are</p>
     </div>
 
-    <div class="upload-section">
+      <div class="upload-section">
+      <p style="margin-bottom: 15px; font-size: 14px; color: #666;">
+        💡 <strong>Tip:</strong> You can ask questions immediately, or upload a PDF for document-specific answers
+      </p>
       <label for="file-input" class="upload-btn" id="upload-label">
-        📄 Upload PDF Document
+        📄 Upload Document (PDF, DOC, DOCX, CSV, Images)
       </label>
-      <input type="file" id="file-input" accept=".pdf">
+      <input type="file" id="file-input" accept=".pdf,.doc,.docx,.csv,.jpg,.jpeg,.png,.gif,.bmp,.webp">
       <button id="reset-btn" class="reset-btn" style="display: none;">
-        🔄 Reset
+        🔄 Reset Document
       </button>
       <div id="status" class="status" style="display: none;"></div>
     </div>
 
-    <div class="chat-section" id="chat-section">
+    <div class="chat-section active" id="chat-section">
       <div class="messages" id="messages">
         <div class="empty-state">
           <h3>👋 Welcome!</h3>
-          <p>Upload a PDF document to start asking questions</p>
+          <p>Ask me anything about Kenyan Government services, or upload a PDF document for document-specific questions</p>
         </div>
       </div>
       <form class="query-form" id="query-form">
         <input
           type="text"
           id="query-input"
-          placeholder="Ask a question about your document..."
+          placeholder="Ask a question about Kenyan Government services..."
           required
           autocomplete="off"
         >
@@ -313,8 +316,24 @@
       const file = e.target.files[0];
       if (!file) return;
 
-      if (file.type !== 'application/pdf') {
-        showStatus('Please upload a PDF file', 'error');
+      // Check file type
+      const allowedTypes = [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'text/csv',
+        'image/jpeg',
+        'image/png',
+        'image/gif',
+        'image/bmp',
+        'image/webp'
+      ];
+      
+      const allowedExtensions = ['.pdf', '.doc', '.docx', '.csv', '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'];
+      const fileExt = '.' + file.name.split('.').pop().toLowerCase();
+      
+      if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExt)) {
+        showStatus('Please upload a supported file: PDF, DOC, DOCX, CSV, or Image (JPG, PNG, GIF, BMP, WEBP)', 'error');
         fileInput.value = '';
         return;
       }
@@ -339,12 +358,15 @@
         const data = await res.json();
         sessionId = data.session_id;
         
-        uploadLabel.textContent = '📄 Upload PDF Document';
+        uploadLabel.textContent = '📄 Upload PDF Document (Optional)';
         uploadLabel.disabled = false;
         resetBtn.style.display = 'inline-block';
-        chatSection.classList.add('active');
-        messagesDiv.innerHTML = '';
-        addMessage('assistant', '✅ Document uploaded successfully! How may I help you?');
+        // Chat section is already active, just update message
+        const emptyState = messagesDiv.querySelector('.empty-state');
+        if (emptyState) {
+          emptyState.remove();
+        }
+        addMessage('assistant', '✅ Document uploaded successfully! I can now answer questions about this document. You can also still ask general questions.');
         showStatus(`Document "${data.filename}" uploaded successfully!`, 'success');
         queryInput.focus();
       } catch (error) {
@@ -355,14 +377,11 @@
       }
     });
 
-    // Query handler
+    // Query handler - works with or without document
     queryForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       
-      if (!sessionId || !queryInput.value.trim()) {
-        if (!sessionId) {
-          showStatus('Please upload a document first', 'error');
-        }
+      if (!queryInput.value.trim()) {
         return;
       }
 
@@ -375,15 +394,23 @@
       addMessage('user', query);
 
       try {
+        // Build request body - include session_id only if we have one
+        const requestBody = {
+          query: query
+        };
+        
+        // Only add session_id if document was uploaded (for document-based queries)
+        if (sessionId) {
+          requestBody.session_id = sessionId;
+        }
+        // If no sessionId, this will be a general Q&A query
+
         const res = await fetch(`${API_URL}/query`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            query: query,
-            session_id: sessionId,
-          }),
+          body: JSON.stringify(requestBody),
         });
 
         if (!res.ok) {
@@ -418,10 +445,10 @@
         }
         sessionId = null;
         resetBtn.style.display = 'none';
-        chatSection.classList.remove('active');
-        messagesDiv.innerHTML = '<div class="empty-state"><h3>👋 Welcome!</h3><p>Upload a PDF document to start asking questions</p></div>';
+        // Keep chat section active, just clear messages
+        messagesDiv.innerHTML = '<div class="empty-state"><h3>👋 Welcome!</h3><p>Ask me anything about Kenyan Government services, or upload a PDF document for document-specific questions</p></div>';
         fileInput.value = '';
-        showStatus('Session reset successfully', 'success');
+        showStatus('Document session reset. You can continue asking general questions.', 'success');
       }
     });
 

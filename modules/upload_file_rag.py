@@ -2,10 +2,11 @@ import os
 import sys
 import glob
 import warnings
+import base64
 from typing import List
 from dotenv import load_dotenv
 
-from langchain_community.document_loaders import PyPDFLoader, CSVLoader
+from langchain_community.document_loaders import PyPDFLoader, CSVLoader, UnstructuredWordDocumentLoader
 from langchain_core.prompts import PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -46,32 +47,147 @@ def load_model():
   return model, embeddings
 
 
+def extract_text_from_image(image_path: str):
+  """
+  Extract text from image using Google Gemini Vision API
+  """
+  try:
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    from langchain_core.messages import HumanMessage
+    from PIL import Image
+    
+    # Read and prepare image
+    image = Image.open(image_path)
+    
+    # Use Gemini Vision to extract text
+    llm = ChatGoogleGenerativeAI(
+      model=os.environ.get("GEMINI_CHAT_MODEL", "models/gemini-2.5-flash"),
+      google_api_key=GEMINI_API_KEY,
+      temperature=0.1
+    )
+    
+    # Create message with image using langchain's format
+    # Gemini supports images directly in HumanMessage content
+    message = HumanMessage(
+      content=[
+        {
+          "type": "text",
+          "text": "Extract all text from this image. Return only the text content, no explanations."
+        },
+        {
+          "type": "image_url",
+          "image_url": image_path
+        }
+      ]
+    )
+    
+    # Alternative: use the image object directly if supported
+    try:
+      response = llm.invoke([message])
+    except:
+      # Fallback: encode as base64
+      with open(image_path, 'rb') as img_file:
+        image_bytes = img_file.read()
+      image_b64 = base64.b64encode(image_bytes).decode('utf-8')
+      
+      ext = os.path.splitext(image_path)[1].lower()
+      mime_types = {
+        '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
+        '.gif': 'image/gif', '.bmp': 'image/bmp', '.webp': 'image/webp'
+      }
+      mime_type = mime_types.get(ext, 'image/jpeg')
+      
+      message = HumanMessage(
+        content=[
+          "Extract all text from this image. Return only the text content, no explanations.",
+          {
+            "type": "image_url",
+            "image_url": f"data:{mime_type};base64,{image_b64}"
+          }
+        ]
+      )
+      response = llm.invoke([message])
+    
+    text_content = response.content if hasattr(response, 'content') else str(response)
+    
+    # Create a Document from the extracted text
+    return [Document(page_content=text_content, metadata={"source": image_path, "type": "image"})]
+  except Exception as e:
+    print(f"[ERROR] Failed to extract text from image: {e}")
+    import traceback
+    print(f"[ERROR] Traceback: {traceback.format_exc()}")
+    raise ValueError(f"Failed to extract text from image: {str(e)}")
+
+
 def load_documents(source_dir: str):
   """
-  Load documents from multiple sources with debug info
+  Load documents from multiple sources: PDF, DOC, DOCX, CSV, and images (JPG, PNG, etc.)
   """
   documents = []
 
-  file_types = {
-    "*.pdf": PyPDFLoader,
-    "*.csv": CSVLoader
-  }
+  # Supported file extensions
+  image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
+  doc_extensions = ['.doc', '.docx']
+  pdf_extensions = ['.pdf']
+  csv_extensions = ['.csv']
 
   if os.path.isfile(source_dir):
     ext = os.path.splitext(source_dir)[1].lower()
-    if ext == ".pdf":
+    
+    if ext in pdf_extensions:
       documents.extend(PyPDFLoader(source_dir).load())
-    elif ext == ".csv":
+    elif ext in csv_extensions:
       documents.extend(CSVLoader(source_dir).load())
+    elif ext in doc_extensions:
+      try:
+        # Try UnstructuredWordDocumentLoader first
+        documents.extend(UnstructuredWordDocumentLoader(source_dir).load())
+      except Exception as e:
+        print(f"[WARNING] UnstructuredWordDocumentLoader failed: {e}")
+        # Fallback: try python-docx if available
+        try:
+          import docx
+          doc = docx.Document(source_dir)
+          text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
+          documents.append(Document(page_content=text, metadata={"source": source_dir, "type": "docx"}))
+        except ImportError:
+          raise ValueError("python-docx is required for DOCX files. Install it with: pip install python-docx")
+        except Exception as e2:
+          raise ValueError(f"Failed to load DOCX file: {str(e2)}")
+    elif ext in image_extensions:
+      documents.extend(extract_text_from_image(source_dir))
+    else:
+      raise ValueError(f"Unsupported file type: {ext}. Supported types: PDF, DOC, DOCX, CSV, JPG, PNG, GIF, BMP, WEBP")
   else:
-    for pattern, loader in file_types.items():
+    # Directory mode - load all supported files
+    for pattern in ["*.pdf", "*.doc", "*.docx", "*.csv", "*.jpg", "*.jpeg", "*.png", "*.gif", "*.bmp", "*.webp"]:
       for file_path in glob.glob(os.path.join(source_dir, pattern)):
-        documents.extend(loader(file_path).load())
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext in pdf_extensions:
+          documents.extend(PyPDFLoader(file_path).load())
+        elif ext in csv_extensions:
+          documents.extend(CSVLoader(file_path).load())
+        elif ext in doc_extensions:
+          try:
+            documents.extend(UnstructuredWordDocumentLoader(file_path).load())
+          except:
+            try:
+              import docx
+              doc = docx.Document(file_path)
+              text = "\n".join([paragraph.text for paragraph in doc.paragraphs])
+              documents.append(Document(page_content=text, metadata={"source": file_path, "type": "docx"}))
+            except:
+              print(f"[WARNING] Skipped {file_path} - could not load")
+        elif ext in image_extensions:
+          try:
+            documents.extend(extract_text_from_image(file_path))
+          except:
+            print(f"[WARNING] Skipped {file_path} - could not extract text from image")
   
   print(f"[DEBUG] Loaded {len(documents)} documents from {source_dir}")
   
   if not documents:
-    raise ValueError("No documents found in the specified sources")
+    raise ValueError("No documents found in the specified sources or failed to extract text")
   
   return documents
 
